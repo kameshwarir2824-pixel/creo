@@ -260,13 +260,21 @@ export function OpsLayout() {
                 <ChevronLeft className="size-4" />
               </button>
             )}
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              {isTeamStaff ? "Creative Pod" : "Operations Suite"}
-            </span>
-            <span className="text-slate-300">/</span>
-            <span className="text-sm font-semibold text-[#0D2137] capitalize">
-              {location.pathname.replace("/admin/", "").replace("/", " ") || "Dashboard"}
-            </span>
+            {!isTeamStaff && (location.pathname === "/admin" || location.pathname === "/admin/") ? (
+              <span className="text-base font-extrabold uppercase text-[#0D2137] tracking-tight">
+                ADMIN
+              </span>
+            ) : (
+              <>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  {isTeamStaff ? "Creative Pod" : "Operations Suite"}
+                </span>
+                <span className="text-slate-300">/</span>
+                <span className="text-sm font-semibold text-[#0D2137] capitalize">
+                  {location.pathname.replace("/admin/", "").replace("/", " ") || "Dashboard"}
+                </span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-4">

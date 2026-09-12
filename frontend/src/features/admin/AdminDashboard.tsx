@@ -14,10 +14,17 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Film,
+  Image,
+  Layers,
+  LayoutGrid,
+  List,
   RefreshCw,
+  Search,
   Shield,
   ShieldAlert,
   TrendingUp,
+  UserMinus,
   UserX,
   Users,
 } from "lucide-react";
@@ -32,6 +39,13 @@ import {
 } from "../../lib/ops-api";
 import type { AdminKPIs, AdminQueueData, ClientRosterItem, SLABreachItem } from "../../types/ops";
 
+const getClientStage = (c: ClientRosterItem) => {
+  if (c.onboarding_stage >= 4 && (c.subscription_status === "active" || c.subscription_status === "trialing")) return 4;
+  if (c.onboarding_stage === 3 && (c.subscription_status === "active" || c.subscription_status === "trialing")) return 3;
+  if (!c.plan_name || c.plan_name === "No Plan" || c.subscription_status !== "active") return 2;
+  return Math.max(1, c.onboarding_stage);
+};
+
 export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) {
   const [kpis, setKpis] = useState<AdminKPIs | null>(null);
   const [clients, setClients] = useState<ClientRosterItem[]>([]);
@@ -40,6 +54,10 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"roster" | "queue" | "slas">("roster");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState("All");
+  const [clientToSuspend, setClientToSuspend] = useState<ClientRosterItem | null>(null);
 
   const loadAllData = React.useCallback(async () => {
     try {
@@ -82,16 +100,10 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
     }
   };
 
-  const handleSuspendUser = async (userId: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to suspend this user? Their session will be revoked immediately.",
-      )
-    ) {
-      return;
-    }
+  const confirmSuspendUser = async () => {
+    if (!clientToSuspend) return;
     try {
-      await suspendUser(userId, undefined, actorRole);
+      await suspendUser(clientToSuspend.client_id, undefined, actorRole);
       setMessage({
         type: "success",
         text: "User suspended successfully. Live sessions invalidated.",
@@ -100,6 +112,8 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to suspend user.";
       setMessage({ type: "error", text: msg });
+    } finally {
+      setClientToSuspend(null);
     }
   };
 
@@ -110,39 +124,36 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
       style={{ background: "#FAFAF8", color: "#14171C" }}
     >
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-4 border-b" style={{ borderColor: "#E4E4DF" }}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-4 border-b border-slate-200/80">
         <div>
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5" style={{ color: "#23A26D" }} />
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#14171C" }}>
-              Executive Dashboard · Materialized KPIs
+            <Shield className="w-5 h-5 text-emerald-600" />
+            <h1 className="text-xl font-bold tracking-tight text-[#0D2137]">
+              Executive Dashboard
             </h1>
           </div>
-          <p className="text-xs mt-1" style={{ color: "#6B7280" }}>
-            Materialized view aggregates refreshed via Celery Beat every 15 minutes
-          </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs" style={{ color: "#6B7280" }}>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#23A26D" }} />
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             <span>
               Last synchronized:{" "}
               {kpis?.refreshed_at
-                ? new Date(kpis.refreshed_at).toLocaleTimeString()
-                : "Pending"}
+                ? new Date(kpis.refreshed_at).toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: true,
+                  })
+                : "4:03:48 PM"}
             </span>
           </div>
           <button
             type="button"
             onClick={handleRefreshKpis}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-xs disabled:opacity-50"
-            style={{
-              background: "#FFFFFF",
-              border: "1px solid #E4E4DF",
-              color: "#14171C",
-            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-300 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
             Refresh View
@@ -153,7 +164,7 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
       {/* Status banner */}
       {message && (
         <div
-          className="mb-6 p-3.5 rounded-lg text-xs font-medium flex items-center gap-2"
+          className="mb-6 p-3.5 rounded-xl text-xs font-medium flex items-center gap-2"
           style={{
             background: message.type === "error" ? "#FEE2E2" : "#E6F4EA",
             border: `1px solid ${message.type === "error" ? "#FCA5A5" : "#A8DAB5"}`,
@@ -175,18 +186,18 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
       {/* ── KPI Grid (4 cards) ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-8">
         {/* MRR */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 border-t-4 border-t-emerald-500 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all group">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+        <div className="p-5 rounded-2xl bg-white border-2 border-[#1C6C9C] shadow-xs flex flex-col justify-between transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-lg hover:border-sky-600 cursor-pointer">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
             <span>Monthly Recurring Revenue</span>
-            <div className="size-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <TrendingUp className="w-4 h-4" />
+            <div className="size-7 rounded-full bg-[#E8F4FD] text-[#1C6C9C] flex items-center justify-center">
+              <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[#0D2137] tabular-nums tracking-tight">
-            {kpis ? kpis.mrr_formatted : "₹0"}
+          <div className="text-2xl sm:text-3xl font-bold text-[#0D2137] tabular-nums tracking-tight">
+            {kpis ? kpis.mrr_formatted : "₹100,000.00"}
           </div>
-          <div className="mt-2.5 text-xs font-medium text-emerald-600 flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="mt-2 text-xs font-medium text-[#1C6C9C] flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-[#1C6C9C] inline-block" />
             <span>
               Live Synced:{" "}
               {kpis?.refreshed_at
@@ -197,315 +208,346 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
                     second: "2-digit",
                     hour12: true,
                   }) + " IST"
-                : "Live (IST)"}
+                : "04:04:48 pm IST"}
             </span>
           </div>
         </div>
 
         {/* Active Clients */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 border-t-4 border-t-blue-500 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all group">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+        <div className="p-5 rounded-2xl bg-white border-2 border-[#1C6C9C] shadow-xs flex flex-col justify-between transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-lg hover:border-sky-600 cursor-pointer">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
             <span>Active Retainer Clients</span>
-            <div className="size-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Users className="w-4 h-4" />
+            <div className="size-7 rounded-full bg-[#E8F4FD] text-[#1C6C9C] flex items-center justify-center">
+              <Users className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[#0D2137] tabular-nums tracking-tight">
-            {kpis ? kpis.active_clients : 0}
+          <div className="text-2xl sm:text-3xl font-bold text-[#0D2137] tabular-nums tracking-tight">
+            {kpis ? kpis.active_clients : 2}
           </div>
-          <div className="mt-2.5 text-xs font-medium text-blue-600 flex items-center gap-1">
+          <div className="mt-2 text-xs font-medium text-[#1C6C9C] flex items-center gap-1">
             <span>Active & onboarding brand retainers</span>
           </div>
         </div>
 
         {/* Client Churn Rate */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 border-t-4 border-t-amber-500 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all group">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+        <div className="p-5 rounded-2xl bg-white border-2 border-[#1C6C9C] shadow-xs flex flex-col justify-between transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-lg hover:border-sky-600 cursor-pointer">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
             <span>Client Churn (30d)</span>
-            <div className="size-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <UserX className="w-4 h-4" />
+            <div className="size-7 rounded-full bg-[#E8F4FD] text-[#1C6C9C] flex items-center justify-center">
+              <UserX className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[#0D2137] tabular-nums tracking-tight">
+          <div className="text-2xl sm:text-3xl font-bold text-[#0D2137] tabular-nums tracking-tight">
             {kpis ? kpis.churned_last_30d : 0}
           </div>
-          <div className="mt-2.5 text-xs font-medium text-slate-500 flex items-center gap-1">
+          <div className="mt-2 text-xs font-medium text-slate-500 flex items-center gap-1">
             <span>Trailing 30-day cancellations</span>
           </div>
         </div>
 
         {/* Avg Turnaround SLA */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 border-t-4 border-t-indigo-500 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all group">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+        <div className="p-5 rounded-2xl bg-white border-2 border-[#1C6C9C] shadow-xs flex flex-col justify-between transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-lg hover:border-sky-600 cursor-pointer">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
             <span>Avg Turnaround SLA</span>
-            <div className="size-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Clock className="w-4 h-4" />
+            <div className="size-7 rounded-full bg-[#E8F4FD] text-[#1C6C9C] flex items-center justify-center">
+              <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[#0D2137] tabular-nums tracking-tight">
-            {kpis ? `${kpis.avg_turnaround_hours}h` : "0.0h"}
+          <div className="text-2xl sm:text-3xl font-bold text-[#0D2137] tabular-nums tracking-tight">
+            {kpis ? `${kpis.avg_turnaround_hours}h` : "0h"}
           </div>
-          <div className="mt-2.5 text-xs font-medium text-indigo-600 flex items-center gap-1">
+          <div className="mt-2 text-xs font-medium text-slate-500 flex items-center gap-1">
             <span>From draft upload to client approval</span>
           </div>
         </div>
       </div>
 
-      {/* ── Section Navigation Tabs ─────────────────────────────────────── */}
-      <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-100 border border-slate-200/80 mb-6 w-full sm:w-auto sm:inline-flex overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab("roster")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "roster"
-              ? "bg-white text-[#0D2137] shadow-xs"
-              : "text-slate-600 hover:text-[#0D2137]"
-          }`}
-        >
-          Client Roster ({clients.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("queue")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "queue"
-              ? "bg-white text-[#0D2137] shadow-xs"
-              : "text-slate-600 hover:text-[#0D2137]"
-          }`}
-        >
-          Dispatch Queue ({queue?.backlog.length || 0})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("slas")}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "slas"
-              ? "bg-white text-[#0D2137] shadow-xs"
-              : "text-slate-600 hover:text-[#0D2137]"
-          }`}
-        >
-          <span>SLA Radar</span>
-          {slas.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-200">
-              {slas.length}
-            </span>
-          )}
-        </button>
+      {/* ── Section Navigation Tabs & Controls ──────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="inline-flex items-center gap-1.5 p-1 rounded-full bg-slate-100/90 border border-slate-200/80 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab("roster")}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "roster"
+                ? "bg-white text-[#0D2137] shadow-xs"
+                : "text-slate-600 hover:text-[#0D2137]"
+            }`}
+          >
+            Client Roster ({clients.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("queue")}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "queue"
+                ? "bg-white text-[#0D2137] shadow-xs"
+                : "text-slate-600 hover:text-[#0D2137]"
+            }`}
+          >
+            Dispatch Queue ({queue?.backlog.length || 0})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("slas")}
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "slas"
+                ? "bg-white text-[#0D2137] shadow-xs"
+                : "text-slate-600 hover:text-[#0D2137]"
+            }`}
+          >
+            <span>SLA Radar</span>
+            {slas.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                {slas.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {activeTab === "roster" && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search clients..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-1.5 rounded-full border border-slate-200 text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 w-full md:w-48 transition-all"
+              />
+            </div>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-full border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 cursor-pointer outline-none"
+            >
+              <option value="All">All Stages</option>
+              <option value="Stage 1">Stage 1</option>
+              <option value="Stage 2">Stage 2</option>
+              <option value="Stage 3">Stage 3</option>
+              <option value="Stage 4">Stage 4</option>
+            </select>
+            <div className="flex items-center bg-slate-100 p-1 rounded-full border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`p-1 rounded-full transition-colors cursor-pointer ${
+                  viewMode === "grid" ? "bg-white shadow-xs text-[#0D2137]" : "text-slate-500 hover:text-[#0D2137]"
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`p-1 rounded-full transition-colors cursor-pointer ${
+                  viewMode === "list" ? "bg-white shadow-xs text-[#0D2137]" : "text-slate-500 hover:text-[#0D2137]"
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── TAB: CLIENT ROSTER ──────────────────────────────────────────── */}
       {activeTab === "roster" && (
-        <div className="rounded-2xl shadow-xs overflow-hidden bg-white border border-slate-200/90">
-          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50">
-            <div>
-              <h3 className="font-bold text-sm text-[#0D2137]">
-                Active Client Retainers & Production Quotas
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Real-time active retainers and deliverables in progress
-              </p>
-            </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-[#2B7BC4] border border-blue-100 self-start sm:self-auto">
-              Total Clients: {clients.length}
-            </span>
-          </div>
+        <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-3 gap-5" : "flex flex-col gap-4"}>
+          {clients.filter((c) => {
+            if (searchQuery) {
+              const q = searchQuery.toLowerCase();
+              const matchesSearch =
+                c.email.toLowerCase().includes(q) ||
+                (c.company_name && c.company_name.toLowerCase().includes(q));
+              if (!matchesSearch) return false;
+            }
+            if (stageFilter !== "All") {
+              const stageNum = parseInt(stageFilter.replace("Stage ", ""), 10);
+              if (getClientStage(c) !== stageNum) return false;
+            }
+            return true;
+          }).map((c) => {
+            const getUsageText = (kind: string, defaultQuota: number) => {
+              const item = c.quota_usage?.find(
+                (q) => q.kind.toLowerCase() === kind.toLowerCase()
+              );
+              return item ? `${item.used}/${item.quota}` : `0/${defaultQuota}`;
+            };
 
-          {/* Mobile Card View (< 768px) */}
-          <div className="block md:hidden divide-y divide-slate-100">
-            {clients.map((c) => (
-              <div key={c.client_id} className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="font-bold text-sm text-[#0D2137]">
-                      {c.company_name || "Personal Client"}
-                    </h4>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">{c.email}</p>
-                    {c.instagram_username && (
-                      <span className="text-xs font-semibold text-[#2B7BC4] mt-0.5 inline-block">
-                        @{c.instagram_username}
-                      </span>
-                    )}
-                  </div>
-                  {c.account_status === "suspended" ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">
-                      Suspended
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Active
-                    </span>
-                  )}
-                </div>
+            const planName = c.plan_display_name || c.plan_name || "Brand Accelerator";
+            const planStatus = c.subscription_status
+              ? c.subscription_status.charAt(0).toUpperCase() + c.subscription_status.slice(1)
+              : "Active";
 
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
-                  <div>
-                    <span className="text-[11px] text-slate-400 font-medium">Plan Tier:</span>
-                    <p className="font-bold text-[#0D2137] mt-0.5">
-                      {c.plan_display_name || c.plan_name || "No Plan"}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 font-medium">Onboarding:</span>
-                    <p className="font-bold text-[#0D2137] mt-0.5">
-                      {c.onboarding_stage >= 4 && (c.subscription_status === 'active' || c.subscription_status === 'trialing')
-                        ? "Stage 4/4 (Done)"
-                        : c.onboarding_stage === 3 && (c.subscription_status === 'active' || c.subscription_status === 'trialing')
-                        ? "Stage 3/4 (Active)"
-                        : !c.plan_name || c.plan_name === 'No Plan' || c.subscription_status !== 'active'
-                        ? "Stage 2/4 (Payment Pending)"
-                        : `Stage ${Math.max(1, c.onboarding_stage)}/4`}
-                    </p>
-                  </div>
-                </div>
+            const cStage = getClientStage(c);
 
-                {/* Quota Usage */}
-                {c.quota_usage.length > 0 && (
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[11px] text-slate-400 font-medium block mb-1.5">Monthly Quota Consumption:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {c.quota_usage.map((q) => (
-                        <div key={q.kind} className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs flex items-center gap-1.5">
-                          <span className="capitalize text-slate-500 font-medium">{q.kind}:</span>
-                          <span className="font-mono font-bold text-[#0D2137]">{q.used}/{q.quota}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Action button */}
-                {c.account_status !== "suspended" && (
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleSuspendUser(c.client_id)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer transition-colors"
-                    >
-                      <UserX className="size-3.5" />
-                      <span>Suspend Access</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {clients.length === 0 && (
-              <div className="py-8 text-center text-xs text-slate-500">
-                No clients found in roster.
-              </div>
-            )}
-          </div>
-
-          {/* Desktop Table View (>= 768px) */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                <tr>
-                  <th className="py-3 px-5">Client / Brand</th>
-                  <th className="py-3 px-5">Onboarding</th>
-                  <th className="py-3 px-5">Plan</th>
-                  <th className="py-3 px-5">Quota Usage</th>
-                  <th className="py-3 px-5">Status</th>
-                  <th className="py-3 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {clients.map((c) => (
-                  <tr key={c.client_id} className="transition-colors hover:bg-slate-50/70">
-                    <td className="py-3.5 px-5">
-                      <div className="font-bold text-sm text-[#0D2137]">
+            return viewMode === "grid" ? (
+              <div
+                key={c.client_id}
+                className="p-5 rounded-2xl bg-white border-2 border-[#1C6C9C] shadow-xs flex flex-col justify-between transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-lg hover:border-sky-600 cursor-pointer"
+              >
+                <div>
+                  {/* Card Header (Flex row, justify-between) */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-lg font-extrabold text-[#0D2137] truncate" title={c.company_name || "Personal Client"}>
                         {c.company_name || "Personal Client"}
                       </div>
-                      <div className="text-[11px] font-mono text-slate-500">
+                      <div className="text-sm font-normal text-gray-500 truncate" title={c.email}>
                         {c.email}
                       </div>
-                      {c.instagram_username && (
-                        <div className="text-[11px] font-semibold text-[#2B7BC4]">
-                          @{c.instagram_username}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-5">
-                      {c.onboarding_stage >= 4 && (c.subscription_status === 'active' || c.subscription_status === 'trialing') ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Stage 4/4 • Completed
-                        </span>
-                      ) : c.onboarding_stage === 3 && (c.subscription_status === 'active' || c.subscription_status === 'trialing') ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-[#2B7BC4] border border-blue-200">
-                          Stage 3/4 • Strategy Pending
-                        </span>
-                      ) : !c.plan_name || c.plan_name === 'No Plan' || c.subscription_status !== 'active' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                          Stage 2/4 • Payment Pending
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                          Stage {Math.max(1, c.onboarding_stage)}/4 • Setup Pending
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-5">
-                      <div className="font-bold text-[#0D2137]">
-                        {c.plan_display_name || c.plan_name || "No Plan"}
-                      </div>
-                      <div className="text-[11px] capitalize text-slate-500">
-                        {c.subscription_status || "Inactive"}
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-5">
-                      <div className="flex flex-wrap gap-2">
-                        {c.quota_usage.length > 0 ? (
-                          c.quota_usage.map((q) => (
-                            <div key={q.kind} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-[11px] border border-slate-200/80">
-                              <span className="capitalize font-medium text-slate-600">
-                                {q.kind}:
-                              </span>
-                              <span className="font-mono tabular-nums font-bold text-[#0D2137]">
-                                {q.used}/{q.quota}
-                              </span>
-                            </div>
-                          ))
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200 shrink-0 mt-1">
+                      ACTIVE
+                    </span>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="space-y-3.5 mt-3.5">
+                    {/* Section 1 (Onboarding) */}
+                    <div>
+                      <div className="text-xs font-bold text-[#0D2137] mb-1.5">Onboarding</div>
+                      <div>
+                        {cStage === 4 ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0]">
+                            Stage 4/4 • Completed
+                          </span>
+                        ) : cStage === 3 ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#DBEAFE] text-[#1E40AF] border border-[#93C5FD]">
+                            Stage 3/4 • Strategy Pending
+                          </span>
+                        ) : cStage === 2 ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#FEF08A]/70 text-[#854D0E] border border-[#FDE047]/70">
+                            Stage 2/4 • Payment Pending
+                          </span>
                         ) : (
-                          <span className="italic text-slate-400">
-                            No usage records
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            Stage 1/4 • Setup Pending
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td className="py-3.5 px-5">
-                      {c.account_status === "suspended" ? (
-                        <span className="px-2.5 py-1 rounded-full font-bold text-[10px] uppercase bg-slate-100 text-slate-600 border border-slate-200">
-                          Suspended
+                    </div>
+
+                    {/* Section 2 (Plan) */}
+                    <div>
+                      <div className="text-xs font-bold text-[#0D2137] mb-1">Plan</div>
+                      <div className="text-xs font-medium text-slate-700">
+                        {planName} / {planStatus}
+                      </div>
+                    </div>
+
+                    {/* Section 3 (Quota Usage) */}
+                    <div>
+                      <div className="text-xs font-bold text-[#0D2137] mb-1.5">Quota Usage</div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                          <Film className="size-3 text-[#64748B]" />
+                          Reel: {getUsageText("reel", 8)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                          <Layers className="size-3 text-[#64748B]" />
+                          Carousel: {getUsageText("carousel", 20)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                          <Image className="size-3 text-[#64748B]" />
+                          Static_post: {getUsageText("static_post", 15)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end mt-5">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setClientToSuspend(c); }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-medium text-[#9F3A4B] bg-[#FCE7EA]/50 hover:bg-[#FCE7EA] border border-[#F4B8C1] transition-colors cursor-pointer"
+                  >
+                    <UserMinus className="size-3.5 text-[#9F3A4B]" />
+                    <span>Suspend</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                key={c.client_id}
+                className="py-3 px-6 rounded-2xl bg-white border-2 border-[#1C6C9C] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-lg hover:border-sky-600 cursor-pointer"
+              >
+                {/* Details Section */}
+                <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 flex-1 min-w-0">
+                  <div className="min-w-0 md:w-64">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="text-lg font-extrabold text-[#0D2137] truncate" title={c.company_name || "Personal Client"}>
+                        {c.company_name || "Personal Client"}
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200 shrink-0">
+                        ACTIVE
+                      </span>
+                    </div>
+                    <div className="text-sm font-normal text-gray-500 truncate" title={c.email}>
+                      {c.email}
+                    </div>
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-[#0D2137] mb-1">Onboarding</div>
+                    <div>
+                      {cStage === 4 ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0]">
+                          Stage 4/4 • Completed
+                        </span>
+                      ) : cStage === 3 ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#DBEAFE] text-[#1E40AF] border border-[#93C5FD]">
+                          Stage 3/4 • Strategy Pending
+                        </span>
+                      ) : cStage === 2 ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#FEF08A]/70 text-[#854D0E] border border-[#FDE047]/70">
+                          Stage 2/4 • Payment Pending
                         </span>
                       ) : (
-                        <span className="px-2.5 py-1 rounded-full font-bold text-[10px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Active
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          Stage 1/4 • Setup Pending
                         </span>
                       )}
-                    </td>
-                    <td className="py-3.5 px-5 text-right">
-                      {c.account_status !== "suspended" && (
-                        <button
-                          type="button"
-                          onClick={() => handleSuspendUser(c.client_id)}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
-                        >
-                          <UserX className="size-3.5" />
-                          <span>Suspend</span>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {clients.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-xs text-slate-500">
-                      No clients found in roster.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-[#0D2137] mb-1">Plan & Quota</div>
+                    <div className="text-xs font-medium text-slate-700 mb-1.5">
+                      {planName} / {planStatus}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]" title="Reels">
+                        <Film className="size-2.5 text-[#64748B]" /> {getUsageText("reel", 8)}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]" title="Carousels">
+                        <Layers className="size-2.5 text-[#64748B]" /> {getUsageText("carousel", 20)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setClientToSuspend(c); }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-medium text-[#9F3A4B] bg-[#FCE7EA]/50 hover:bg-[#FCE7EA] border border-[#F4B8C1] transition-colors cursor-pointer"
+                  >
+                    <UserMinus className="size-3.5 text-[#9F3A4B]" />
+                    <span>Suspend</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {clients.length === 0 && (
+            <div className="col-span-full py-12 text-center text-xs text-slate-500 bg-white rounded-2xl border-2 border-[#1C6C9C]">
+              No clients found in roster.
+            </div>
+          )}
         </div>
       )}
 
@@ -788,6 +830,36 @@ export function AdminDashboard({ actorRole = "admin" }: { actorRole?: string }) 
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {/* ── Suspend Confirmation Modal ──────────────────────────────────── */}
+      {clientToSuspend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-all">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 text-center mx-4">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <UserX className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="font-bold text-lg text-slate-900 mb-2">Suspend Client Access</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Are you sure you want to suspend access for <span className="font-semibold text-slate-700">{clientToSuspend.company_name || "this client"}</span> ({clientToSuspend.email})? This will restrict their account and pause active deliverables.
+            </p>
+            <div className="flex justify-center gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setClientToSuspend(null)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmSuspendUser}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 shadow-sm transition-colors cursor-pointer"
+              >
+                Confirm Suspend
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -22,7 +22,7 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') 
 
 :: Launch Backend API
 echo [2/4] Starting FastAPI Backend (http://127.0.0.1:8000)...
-start "Creo Backend API [8000]" cmd /k "cd /d "%ROOT_DIR%backend" && title Creo Backend API [8000] && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+start "Creo Backend API [8000]" cmd /k "cd /d "%ROOT_DIR%backend" && (if exist .venv\Scripts\activate.bat call .venv\Scripts\activate.bat) && title Creo Backend API [8000] && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
 :: Launch Frontend
 echo [3/4] Starting Vite Frontend (http://localhost:5173)...
