@@ -1408,6 +1408,7 @@ async def list_admin_deliverables(
             "description": d.rejection_comment or f"High-resolution social media creative formatted for Instagram brand channel.",
             "assigned_name": assignee_name or "Creative Studio",
             "created_at": d.created_at.isoformat() if d.created_at else None,
+            "uploaderId": str(d.submitted_by) if d.submitted_by else None,
         })
     return results
 
@@ -1489,7 +1490,24 @@ async def create_admin_deliverable(
         "description": deliverable.rejection_comment or "High-resolution creative deliverable formatted for Instagram.",
         "assigned_name": actor.user_id and str(actor.user_id)[:8] or "Team Lead",
         "created_at": deliverable.created_at.isoformat() if deliverable.created_at else None,
+        "uploaderId": str(deliverable.submitted_by) if deliverable.submitted_by else None,
     }
+
+
+@router.delete("/deliverables/{deliverable_id}")
+async def delete_admin_deliverable(
+    deliverable_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    actor: Actor = StaffActor,
+) -> dict[str, Any]:
+    """Admin or uploader deletes a deliverable record."""
+    deliverable = await db.get(Deliverable, deliverable_id)
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Deliverable not found")
+    
+    await db.delete(deliverable)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.patch("/deliverables/{deliverable_id}/status")

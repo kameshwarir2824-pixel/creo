@@ -260,18 +260,18 @@ export function OpsLayout() {
                 <ChevronLeft className="size-4" />
               </button>
             )}
-            {!isTeamStaff && (location.pathname === "/admin" || location.pathname === "/admin/") ? (
-              <span className="text-base font-extrabold uppercase text-[#0D2137] tracking-tight">
+            {!isTeamStaff ? (
+              <span className="font-bold text-xl text-slate-800 tracking-tight">
                 ADMIN
               </span>
             ) : (
               <>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  {isTeamStaff ? "Creative Pod" : "Operations Suite"}
+                  Creative Pod
                 </span>
                 <span className="text-slate-300">/</span>
                 <span className="text-sm font-semibold text-[#0D2137] capitalize">
-                  {location.pathname.replace("/admin/", "").replace("/", " ") || "Dashboard"}
+                  {location.pathname.replace("/dashboard/", "").replace("/", " ") || "Dashboard"}
                 </span>
               </>
             )}
@@ -406,14 +406,16 @@ export function OpsLayout() {
 
           <div className="flex items-center gap-2">
             {/* Quick Kanban Shortcut */}
-            <Link
-              to="/dashboard"
-              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-                isKanban ? "bg-[#2B7BC4] text-white" : "text-slate-600 bg-slate-100 hover:bg-slate-200"
-              }`}
-            >
-              Kanban
-            </Link>
+            {!location.pathname.includes("calendar") && (
+              <Link
+                to="/dashboard"
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                  isKanban ? "bg-[#2B7BC4] text-white" : "text-slate-600 bg-slate-100 hover:bg-slate-200"
+                }`}
+              >
+                Kanban
+              </Link>
+            )}
 
             {/* Notification Bell (Mobile) */}
             <button

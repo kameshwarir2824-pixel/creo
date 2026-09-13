@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router";
 import {
   Users,
@@ -83,16 +84,13 @@ export function AdminClientsPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center gap-2">
             <Users className="size-5 text-[#2B7BC4]" />
             <h1 className="text-2xl font-bold tracking-tight text-[#0D2137]">Clients Roster</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Registered brands, onboarding stage tracking, and creative quota allocations
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200">
@@ -105,20 +103,20 @@ export function AdminClientsPage() {
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4.5 text-slate-400" />
           <input
             type="text"
             placeholder="Search by brand name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-white text-xs text-[#0D2137] focus:outline-none focus:border-[#2B7BC4] focus:ring-1 focus:ring-[#2B7BC4]"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-[#0D2137] placeholder:text-slate-400 focus:outline-none focus:border-[#2B7BC4] focus:ring-2 focus:ring-[#2B7BC4]/20 shadow-xs"
           />
         </div>
         <div className="flex items-center gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-[#0D2137] focus:outline-none focus:border-[#2B7BC4]"
+            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-[#0D2137] focus:outline-none focus:border-[#2B7BC4] focus:ring-2 focus:ring-[#2B7BC4]/20 shadow-xs cursor-pointer"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -129,47 +127,53 @@ export function AdminClientsPage() {
       </div>
 
       {/* Client List */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
+      <div className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-sm overflow-hidden">
         {/* Mobile View (< 768px) */}
-        <div className="block md:hidden divide-y divide-slate-100">
+        <div className="block md:hidden divide-y divide-slate-100 p-2">
           {loading ? (
-            <div className="p-8 text-center text-slate-400">
-              <Loader2 className="size-5 animate-spin mx-auto mb-2 text-[#2B7BC4]" />
-              Loading client roster...
+            <div className="p-12 text-center text-slate-400">
+              <Loader2 className="size-6 animate-spin mx-auto mb-3 text-[#2B7BC4]" />
+              <p className="text-sm font-medium">Loading client roster...</p>
             </div>
           ) : filteredClients.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-xs">
+            <div className="p-12 text-center text-slate-500 text-sm">
               No clients found matching filter criteria.
             </div>
           ) : (
             filteredClients.map((client) => (
-              <div key={client.client_id} className="p-4 space-y-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h4 className="font-bold text-sm text-[#0D2137]">
-                      {client.company_name || client.email.split("@")[0]}
-                    </h4>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">{client.email}</p>
+              <div key={client.client_id} className="p-5 space-y-3.5 bg-white rounded-xl my-2 border border-slate-100 shadow-2xs">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="size-11 rounded-xl bg-gradient-to-br from-blue-50 to-slate-100 border border-blue-100/80 flex items-center justify-center text-base font-bold text-[#2B7BC4] shrink-0 shadow-2xs">
+                      {(client.company_name?.[0] || client.email?.[0] || "C").toUpperCase()}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-base text-[#0D2137]">
+                        {client.company_name || client.email.split("@")[0]}
+                      </h4>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">{client.email}</p>
+                    </div>
                   </div>
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                       client.account_status === "active"
                         ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         : "bg-amber-50 text-amber-700 border border-amber-200"
                     }`}
                   >
+                    <span className={`size-1.5 rounded-full ${client.account_status === "active" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
                     {client.account_status}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-400">Plan:</span>
-                    <span className="font-semibold text-[#0D2137] capitalize">
+                <div className="flex items-center justify-between text-sm pt-2.5 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-medium">Plan:</span>
+                    <span className="font-semibold text-slate-800 capitalize bg-slate-100 px-3 py-1 rounded-lg text-xs border border-slate-200/60">
                       {client.plan_name || "Growth Tier"}
                     </span>
                   </div>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold ${
                     client.onboarding_stage >= 4 && client.plan_name && client.plan_name !== "No Plan"
                       ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                       : client.onboarding_stage === 3 && client.plan_name && client.plan_name !== "No Plan"
@@ -178,6 +182,15 @@ export function AdminClientsPage() {
                       ? "bg-amber-50 text-amber-800 border border-amber-200"
                       : "bg-slate-100 text-slate-700 border border-slate-200"
                   }`}>
+                    <span className={`size-1.5 rounded-full ${
+                      client.onboarding_stage >= 4 && client.plan_name && client.plan_name !== "No Plan"
+                        ? "bg-emerald-500"
+                        : client.onboarding_stage === 3 && client.plan_name && client.plan_name !== "No Plan"
+                        ? "bg-[#2B7BC4]"
+                        : !client.plan_name || client.plan_name === "No Plan"
+                        ? "bg-amber-500"
+                        : "bg-slate-400"
+                    }`} />
                     {client.onboarding_stage >= 4 && client.plan_name && client.plan_name !== "No Plan"
                       ? "Stage 4 / 4 • Done"
                       : client.onboarding_stage === 3 && client.plan_name && client.plan_name !== "No Plan"
@@ -193,41 +206,48 @@ export function AdminClientsPage() {
         </div>
 
         {/* Desktop Table (>= 768px) */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-[#0D2137] border-b border-slate-200 font-semibold uppercase tracking-wider text-[11px]">
+        <div className="hidden md:block w-full overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/90 text-[#0D2137] border-b border-slate-200 font-bold uppercase tracking-wider text-xs">
               <tr>
-                <th className="px-4 py-3">Client / Brand</th>
-                <th className="px-4 py-3">Onboarding Stage</th>
-                <th className="px-4 py-3">Current Plan</th>
-                <th className="px-4 py-3">Account Status</th>
+                <th className="px-8 py-4.5">Client / Brand</th>
+                <th className="px-8 py-4.5">Onboarding Stage</th>
+                <th className="px-8 py-4.5">Current Plan</th>
+                <th className="px-8 py-4.5">Account Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                    <Loader2 className="size-5 animate-spin mx-auto mb-2 text-[#2B7BC4]" />
-                    Loading client roster...
+                  <td colSpan={4} className="px-8 py-16 text-center text-slate-400">
+                    <Loader2 className="size-6 animate-spin mx-auto mb-3 text-[#2B7BC4]" />
+                    <span className="text-sm font-medium">Loading client roster...</span>
                   </td>
                 </tr>
               ) : filteredClients.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={4} className="px-8 py-16 text-center text-slate-400 text-sm font-medium">
                     No clients found matching filter criteria.
                   </td>
                 </tr>
               ) : (
                 filteredClients.map((client) => (
-                  <tr key={client.client_id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-[#0D2137]">
-                        {client.company_name || client.email.split("@")[0]}
+                  <tr key={client.client_id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-3.5">
+                        <div className="size-11 rounded-xl bg-gradient-to-br from-blue-50 to-slate-100 border border-blue-100/80 flex items-center justify-center text-base font-bold text-[#2B7BC4] shrink-0 shadow-2xs">
+                          {(client.company_name?.[0] || client.email?.[0] || "C").toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-bold text-base text-[#0D2137] leading-snug">
+                            {client.company_name || client.email.split("@")[0]}
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono mt-0.5">{client.email}</div>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-400">{client.email}</div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    <td className="px-8 py-5">
+                      <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold ${
                         client.onboarding_stage >= 4 && client.plan_name && client.plan_name !== "No Plan"
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                           : client.onboarding_stage === 3 && client.plan_name && client.plan_name !== "No Plan"
@@ -236,6 +256,15 @@ export function AdminClientsPage() {
                           ? "bg-amber-50 text-amber-800 border border-amber-200"
                           : "bg-slate-100 text-slate-700 border border-slate-200"
                       }`}>
+                        <span className={`size-2 rounded-full ${
+                          client.onboarding_stage >= 4 && client.plan_name && client.plan_name !== "No Plan"
+                            ? "bg-emerald-500"
+                            : client.onboarding_stage === 3 && client.plan_name && client.plan_name !== "No Plan"
+                            ? "bg-[#2B7BC4]"
+                            : !client.plan_name || client.plan_name === "No Plan"
+                            ? "bg-amber-500"
+                            : "bg-slate-400"
+                        }`} />
                         {client.onboarding_stage >= 4 && client.plan_name && client.plan_name !== "No Plan"
                           ? "Stage 4 / 4 • Completed"
                           : client.onboarding_stage === 3 && client.plan_name && client.plan_name !== "No Plan"
@@ -245,19 +274,22 @@ export function AdminClientsPage() {
                           : `Stage ${Math.max(1, client.onboarding_stage)} / 4 • Setup Pending`}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-slate-700 capitalize">
+                    <td className="px-8 py-5">
+                      <span className="inline-block px-3 py-1.5 rounded-lg bg-slate-100/90 border border-slate-200/60 font-semibold text-xs text-slate-700 capitalize">
                         {client.plan_name || "Growth Tier"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-8 py-5">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                           client.account_status === "active"
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-amber-50 text-amber-700 border border-amber-200"
                         }`}
                       >
+                        <span className={`size-2 rounded-full ${
+                          client.account_status === "active" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                        }`} />
                         {client.account_status}
                       </span>
                     </td>
@@ -276,6 +308,7 @@ export function AdminClientsPage() {
 // 2. ADMIN DELIVERABLES PAGE (Team Lead & Admin Creative Uploads)
 // ─────────────────────────────────────────────────────────────────────────────
 export function AdminDeliverablesPage() {
+  const { user } = useAuth();
   const [deliverables, setDeliverables] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,6 +322,8 @@ export function AdminDeliverablesPage() {
   const [copiedCaption, setCopiedCaption] = useState<boolean>(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isVideoLoading, setIsVideoLoading] = useState<boolean>(true);
+  const [deliverableToDelete, setDeliverableToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Close enlarge modal on Escape key
   useEffect(() => {
@@ -377,6 +412,20 @@ export function AdminDeliverablesPage() {
       })
       .catch(() => setClients([]));
   }, [fetchDeliverables]);
+
+  const handleDeleteDeliverable = async () => {
+    if (!deliverableToDelete) return;
+    setIsDeleting(true);
+    try {
+      await request(`/api/v1/admin/deliverables/${deliverableToDelete.id}`, { method: "DELETE" });
+      setDeliverables((prev) => prev.filter((d) => d.id !== deliverableToDelete.id));
+      setDeliverableToDelete(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     setUpdatingId(id);
@@ -539,9 +588,6 @@ export function AdminDeliverablesPage() {
             <FileStack className="size-5 text-[#2B7BC4]" />
             <h1 className="text-2xl font-bold tracking-tight text-[#0D2137]">Deliverables Hub</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Team Leads & Editors upload, manage, and dispatch creative deliverables directly for client approval
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -784,17 +830,29 @@ export function AdminDeliverablesPage() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewZoom(1);
-                    setIsTheaterExpanded(false);
-                    setPreviewItem(item);
-                  }}
-                  className="text-xs font-bold text-[#2B7BC4] hover:text-[#1A5EA8] flex items-center gap-1.5 cursor-pointer group/btn"
-                >
-                  <Maximize2 className="size-3.5 transition-transform group-hover/btn:scale-110" /> Full Preview & Enlarge
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewZoom(1);
+                      setIsTheaterExpanded(false);
+                      setPreviewItem(item);
+                    }}
+                    className="text-xs font-bold text-[#2B7BC4] hover:text-[#1A5EA8] flex items-center gap-1.5 cursor-pointer group/btn"
+                  >
+                    <Maximize2 className="size-3.5 transition-transform group-hover/btn:scale-110" /> Full Preview & Enlarge
+                  </button>
+                  
+                  {(user?.role === "admin" || user?.id === item.uploaderId) && (
+                    <button
+                      type="button"
+                      onClick={() => setDeliverableToDelete(item)}
+                      className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="size-3.5" /> Delete
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   {item.status !== "approved" ? (
                     <button
@@ -1519,6 +1577,48 @@ export function AdminDeliverablesPage() {
           </div>
         </div>
       )}
+
+      {/* Scroll-Proof Confirm Delete Modal */}
+      {deliverableToDelete &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] w-screen h-screen flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-all"
+            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isDeleting) setDeliverableToDelete(null);
+            }}
+          >
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 text-center mx-auto my-auto animate-in fade-in zoom-in-95 duration-150">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="font-bold text-lg text-slate-900 mb-2">Delete Deliverable</h3>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                Are you sure you want to delete <span className="font-semibold text-slate-700">"{deliverableToDelete.title}"</span>? This action cannot be undone.
+              </p>
+              <div className="flex justify-center gap-3 mt-6">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setDeliverableToDelete(null)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeleteDeliverable}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 shadow-sm transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting && <Loader2 className="size-4 animate-spin" />}
+                  Confirm Delete
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
@@ -1562,16 +1662,7 @@ export function AdminTasksPage() {
             <CheckSquare className="size-5 text-[#2B7BC4]" />
             <h1 className="text-2xl font-bold tracking-tight text-[#0D2137]">Task Dispatch Queue</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Workload distribution, creative pod assignments, and SLA production deadlines
-          </p>
         </div>
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#2B7BC4] text-white text-xs font-semibold hover:bg-[#1A5EA8] transition-colors shadow-xs"
-        >
-          Open Creative Kanban →
-        </Link>
       </div>
 
       {/* Staff Capacity Grid */}
@@ -1593,9 +1684,9 @@ export function AdminTasksPage() {
                     {member.department}
                   </span>
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-500">
+                <div className="flex justify-between text-[11px] text-green-600 font-semibold">
                   <span>Active WIP:</span>
-                  <span className="font-bold text-[#0D2137]">
+                  <span className="font-bold text-green-600">
                     {member.active_wip} / {member.daily_capacity}
                   </span>
                 </div>
@@ -1782,6 +1873,13 @@ const CALENDAR_MONTHS = [
 
 const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+const CALENDAR_TINTS = [
+  "bg-blue-50/40",
+  "bg-blue-50/70",
+  "bg-sky-50/60",
+  "bg-indigo-50/40",
+];
+
 export function AdminCalendarPage() {
   const today = new Date();
   const [currentYear, setCurrentYear] = useState<number>(today.getFullYear());
@@ -1813,11 +1911,11 @@ export function AdminCalendarPage() {
   };
 
   // Month grid calculation
+  const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const firstDayWeekday = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun
 
   const calendarCells: (number | null)[] = [];
-  for (let i = 0; i < firstDayWeekday; i++) {
+  for (let i = 0; i < firstDayOfWeek; i++) {
     calendarCells.push(null);
   }
   for (let d = 1; d <= daysInMonth; d++) {
@@ -1847,9 +1945,6 @@ export function AdminCalendarPage() {
             <CalendarDays className="size-5 text-[#2B7BC4]" />
             <h1 className="text-2xl font-bold tracking-tight text-[#0D2137]">Content Calendar</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Agency master scheduling timeline across all brand accounts and creative pods
-          </p>
         </div>
 
         {/* Month Navigation & Format Filter */}
@@ -1934,11 +2029,11 @@ export function AdminCalendarPage() {
                   <div
                     key={item.id || idx}
                     onClick={() => setSelectedEvent(item)}
-                    className="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-pointer space-y-2"
+                    className="p-3.5 rounded-xl border border-blue-100 bg-blue-50/30 hover:bg-blue-50/60 transition-colors cursor-pointer space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="size-8 rounded-lg bg-[#2B7BC4] text-white flex items-center justify-center font-bold text-xs font-mono shrink-0">
+                        <span className="size-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs font-mono shrink-0 shadow-xs">
                           {dayNum}
                         </span>
                         <div>
@@ -1980,7 +2075,7 @@ export function AdminCalendarPage() {
 
         {/* Desktop 7-Column Grid (>= 768px) with Weekday Offset Padding */}
         <div className="hidden md:block">
-          <div className="grid grid-cols-7 gap-2.5 mb-2.5 text-center text-xs font-bold uppercase text-slate-400">
+          <div className="grid grid-cols-7 gap-2.5 mb-2.5 text-center text-xs font-bold uppercase text-slate-500 tracking-wider">
             {WEEKDAY_HEADERS.map((w) => (
               <div key={w} className="py-1">
                 {w}
@@ -2000,7 +2095,7 @@ export function AdminCalendarPage() {
                   return (
                     <div
                       key={`blank-${idx}`}
-                      className="min-h-[115px] p-2 rounded-xl bg-slate-50/20 border border-slate-100/60 opacity-40 pointer-events-none"
+                      className="min-h-[120px] p-2.5 rounded-xl bg-slate-50/30 border border-slate-100/60 opacity-30 pointer-events-none"
                     />
                   );
                 }
@@ -2015,27 +2110,29 @@ export function AdminCalendarPage() {
                   today.getMonth() === currentMonth &&
                   today.getDate() === dateNum;
 
+                const tint = CALENDAR_TINTS[idx % CALENDAR_TINTS.length];
+
                 return (
                   <div
                     key={`day-${dateNum}`}
-                    className={`min-h-[120px] p-2 rounded-xl border transition-all flex flex-col justify-between ${
+                    className={`min-h-[120px] p-2.5 rounded-xl transition-all flex flex-col justify-between ${
                       isToday
-                        ? "border-[#2B7BC4] bg-blue-50/20 shadow-xs"
-                        : "border-slate-200/80 bg-slate-50/40 hover:border-slate-300"
+                        ? "border-2 border-blue-500 bg-blue-50/90 shadow-xs ring-2 ring-blue-500/20"
+                        : `border border-blue-100 ${tint} hover:border-blue-300 hover:shadow-2xs`
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span
-                        className={`size-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        className={`size-6.5 rounded-full flex items-center justify-center text-xs font-bold ${
                           isToday
-                            ? "bg-[#2B7BC4] text-white"
+                            ? "bg-blue-600 text-white shadow-xs"
                             : "text-[#0D2137]"
                         }`}
                       >
                         {dateNum}
                       </span>
                       {dayEvents.length > 0 && (
-                        <span className="text-[10px] font-bold text-slate-400">
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.5 rounded-full">
                           {dayEvents.length}
                         </span>
                       )}
@@ -2267,9 +2364,6 @@ export function AdminSupportPage() {
             <LifeBuoy className="size-5 text-[#2B7BC4]" />
             <h1 className="text-2xl font-bold tracking-tight text-[#0D2137]">Support Tickets</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Real client inquiries, SLA triage, and concierge customer success management
-          </p>
         </div>
         <div className="flex items-center gap-3">
           {/* Status Filter */}
@@ -2682,11 +2776,6 @@ export function AdminTeamsPage() {
               {isTeamLead ? "My Pod Team & Capacity" : "Agency Team & Capacity Management"}
             </h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {isTeamLead
-              ? "Manage your creative pod's editors, designers, and calibrate individual daily workload capacities."
-              : "Internal creatives, editors, team leads, and agency-wide load-balanced pod controllers."}
-          </p>
         </div>
         <button
           type="button"
@@ -4305,11 +4394,6 @@ export function AdminLeavePage() {
               {isAdmin ? "Staff Leave Approvals" : "Staff Leave Requests"}
             </h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {isAdmin
-              ? "Review, approve, and manage time-off requests submitted by Team Leads and creative pod members"
-              : "Hierarchical time-off approval workflow: Team Leads review pod requests, Admins oversee agency operations"}
-          </p>
         </div>
         <div className="flex items-center gap-2">
           {!isAdmin ? (
